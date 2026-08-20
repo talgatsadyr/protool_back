@@ -18,6 +18,7 @@ class Category(MPTTModel):
 class Product(models.Model):
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='products')
     external_id = models.SlugField(max_length=255, unique=True, blank=True, null=True, verbose_name='Код продукта (источник)')
+    article = models.CharField(max_length=32, blank=True, null=True, db_index=True, verbose_name='Артикул')
     name = models.CharField(max_length=255, verbose_name='Название продукта')
     description = models.TextField(blank=True, null=True, verbose_name='Описание продукта')
     price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Цена продукта')

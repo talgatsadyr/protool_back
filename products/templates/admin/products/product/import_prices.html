@@ -1,0 +1,11 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<h1>Импорт цен из Excel</h1>
+<p>Первая строка — заголовки. Колонка A — артикул (Код), колонка C — цена (Цена в Сомах).</p>
+<form method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <input type="submit" value="Загрузить" class="default">
+</form>
+{% endblock %}

@@ -200,6 +200,7 @@ class Command(BaseCommand):
         )
         product.category = category
         product.name = name[:255]
+        product.article = item.get('article') or None
         product.description = item.get('description') or ''
         product.product_properties = item.get('properties') or None
         product.save()
