@@ -12,6 +12,19 @@ from .serializers import CategorySerializer, ProductDetailSerializer, ProductLis
 SIMILAR_PRODUCTS_DEFAULT_LIMIT = 10
 SIMILAR_PRODUCTS_MAX_LIMIT = 50
 
+PRODUCT_ORDERING = {
+    'cheap': ('price',),
+    'expensive': ('-price',),
+    'name': ('name',),
+}
+
+
+def apply_product_ordering(queryset, ordering_param):
+    ordering = PRODUCT_ORDERING.get(ordering_param)
+    if ordering:
+        return queryset.order_by(*ordering)
+    return queryset
+
 
 class ProductPagination(PageNumberPagination):
     page_size = 20
@@ -33,6 +46,7 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
         category = self.get_object()
         category_ids = [category.pk] + list(category.get_descendants().values_list('pk', flat=True))
         queryset = Product.objects.filter(category_id__in=category_ids).select_related('category')
+        queryset = apply_product_ordering(queryset, request.query_params.get('ordering'))
 
         paginator = ProductPagination()
         page = paginator.paginate_queryset(queryset, request)
@@ -41,7 +55,7 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class ProductViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Product.objects.select_related('category').all()
+    queryset = Product.objects.select_related('category').prefetch_related('images').all()
     permission_classes = [AllowAny]
     pagination_class = ProductPagination
 
@@ -55,6 +69,8 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         category_id = self.request.query_params.get('category')
         if category_id:
             queryset = queryset.filter(category_id=category_id)
+        if self.action == 'list':
+            queryset = apply_product_ordering(queryset, self.request.query_params.get('ordering'))
         return queryset
 
     @action(detail=True, methods=['get'])

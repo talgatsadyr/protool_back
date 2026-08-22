@@ -7,7 +7,7 @@ from django.shortcuts import redirect, render
 from django.urls import path
 from openpyxl import load_workbook
 
-from .models import Category, Product
+from .models import Category, Product, ProductImage
 
 ARTICLE_SUFFIX_RE = re.compile(r'-(\d+)$')
 
@@ -23,12 +23,18 @@ class CategoryAdmin(admin.ModelAdmin):
     list_filter = ('parent',)
 
 
+class ProductImageInline(admin.TabularInline):
+    model = ProductImage
+    extra = 0
+
+
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     list_display = ('name', 'article', 'category', 'price')
     search_fields = ('name', 'article', 'external_id')
     list_filter = ('category',)
     change_list_template = 'admin/products/product/change_list.html'
+    inlines = (ProductImageInline,)
 
     def get_urls(self):
         custom_urls = [
