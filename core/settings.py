@@ -27,6 +27,12 @@ DEBUG = env_bool('DEBUG', not PROD)
 
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS', '').split(',') if h.strip()]
 
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip() for origin in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',') if origin.strip()
+] or [f'https://{h}' for h in ALLOWED_HOSTS if h not in ('localhost', 'protool-back')]
+
 
 # Application definition
 
@@ -132,7 +138,8 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/protool-static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 
 # Media files (user uploads)
