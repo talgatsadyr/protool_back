@@ -55,7 +55,7 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class ProductViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Product.objects.select_related('category').prefetch_related('images').all()
+    queryset = Product.objects.select_related('category').prefetch_related('images').exclude(price__isnull=True).exclude(price__lte=0)
     permission_classes = [AllowAny]
     pagination_class = ProductPagination
 
