@@ -26,6 +26,10 @@ def apply_product_ordering(queryset, ordering_param):
     return queryset
 
 
+def priced_products():
+    return Product.objects.exclude(price__isnull=True).exclude(price__lte=0)
+
+
 class ProductPagination(PageNumberPagination):
     page_size = 20
     page_size_query_param = 'page_size'
@@ -45,7 +49,7 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
     def products(self, request, pk=None):
         category = self.get_object()
         category_ids = [category.pk] + list(category.get_descendants().values_list('pk', flat=True))
-        queryset = Product.objects.filter(category_id__in=category_ids).select_related('category')
+        queryset = priced_products().filter(category_id__in=category_ids).select_related('category')
         queryset = apply_product_ordering(queryset, request.query_params.get('ordering'))
 
         paginator = ProductPagination()
@@ -55,7 +59,7 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class ProductViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Product.objects.select_related('category').prefetch_related('images').exclude(price__isnull=True).exclude(price__lte=0)
+    queryset = priced_products().select_related('category').prefetch_related('images')
     permission_classes = [AllowAny]
     pagination_class = ProductPagination
 
@@ -82,11 +86,11 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
             limit = SIMILAR_PRODUCTS_DEFAULT_LIMIT
         limit = max(1, min(limit, SIMILAR_PRODUCTS_MAX_LIMIT))
 
-        queryset = Product.objects.filter(category=product.category).exclude(pk=product.pk)
+        queryset = priced_products().filter(category=product.category).exclude(pk=product.pk)
 
         if queryset.count() < limit and product.category.parent_id:
             sibling_categories = product.category.parent.get_descendants(include_self=True)
-            queryset = Product.objects.filter(category__in=sibling_categories).exclude(pk=product.pk)
+            queryset = priced_products().filter(category__in=sibling_categories).exclude(pk=product.pk)
 
         queryset = queryset.select_related('category').annotate(
             price_diff=ExpressionWrapper(
