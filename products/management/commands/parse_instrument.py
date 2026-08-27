@@ -209,7 +209,8 @@ class Command(BaseCommand):
         if not external_id or not name:
             return
 
-        if self.skip_existing and Product.objects.filter(external_id=external_id).exists():
+        article = item.get('article') or None
+        if self.skip_existing and article and Product.objects.filter(article=article).exists():
             return
 
         product, created = Product.objects.get_or_create(
@@ -218,7 +219,7 @@ class Command(BaseCommand):
         )
         product.category = category
         product.name = name[:255]
-        product.article = item.get('article') or None
+        product.article = article
         product.description = item.get('description') or ''
 
         detail = None
