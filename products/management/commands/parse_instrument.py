@@ -32,33 +32,21 @@ def slug_from_url(url):
 
 
 def parse_root_categories(html):
+    """Корневая страница /catalog/ показывает лишь витрину популярных
+    подкатегорий, а не полное дерево — поэтому отсюда берём только
+    названия и ссылки верхнеуровневых категорий. Дальше дерево строится
+    по SUB_SECTIONS из JSON filter-API (см. Command._process_category)."""
     soup = BeautifulSoup(html, 'lxml')
     nodes = []
     for item in soup.select('div.catalog > div.item'):
         title_a = item.select_one('div.item__title a[href]')
         if not title_a:
             continue
-        children = [
-            {'name': a.get_text(strip=True), 'url': urljoin(BASE_URL, a['href'])}
-            for a in item.select('ul.item__wrapper li a[href]')
-        ]
         nodes.append({
             'name': title_a.get_text(strip=True),
             'url': urljoin(BASE_URL, title_a['href']),
-            'children': children,
         })
     return nodes
-
-
-def parse_subcategory_children(html):
-    soup = BeautifulSoup(html, 'lxml')
-    menu = soup.select_one('div.static-title__menu')
-    if not menu:
-        return []
-    return [
-        {'name': a.get_text(strip=True), 'url': urljoin(BASE_URL, a['href'])}
-        for a in menu.select('a.item[href]')
-    ]
 
 
 class Command(BaseCommand):
@@ -107,14 +95,7 @@ class Command(BaseCommand):
                 return
 
         for top in top_nodes:
-            top_category = self._save_category(top['name'], top['url'], parent=None)
-            if not top_category:
-                continue
-            if top['children']:
-                for child in top['children']:
-                    self._process_category(child['name'], child['url'], top_category, depth=1)
-            else:
-                self._scrape_products(top_category)
+            self._process_category(top['name'], top['url'], parent=None, depth=0)
 
         self.stdout.write(self.style.SUCCESS(
             f'Готово. Категорий: {self.categories_count}, товаров: {self.products_count}, ошибок: {self.errors_count}'
@@ -150,6 +131,10 @@ class Command(BaseCommand):
             return None
 
     def _process_category(self, name, url, parent, depth):
+        """Дерево категорий строится по SUB_SECTIONS из ответа filter-API —
+        та же ручка, что отдаёт товары, всегда содержит полный и актуальный
+        список дочерних разделов (в отличие от HTML-вёрстки каталога, где
+        на страницах показана только куцая витрина/устаревшая разметка)."""
         category = self._save_category(name, url, parent)
         if not category:
             return
@@ -157,17 +142,22 @@ class Command(BaseCommand):
             self._scrape_products(category)
             return
 
-        html = self._get(url)
-        if html is None:
+        data = self._get_json(FILTER_URL, params={
+            'section_code': category.slug,
+            'page': 1,
+            'page_size': self.page_size,
+        })
+        if not data or data.get('status') != 'success':
             return
 
-        children = parse_subcategory_children(html)
-        if not children:
-            self._scrape_products(category)
+        sub_sections = ((data.get('data') or {}).get('sections') or {}).get('SUB_SECTIONS') or []
+        if not sub_sections:
+            self._scrape_products(category, first_page=data)
             return
 
-        for child in children:
-            self._process_category(child['name'], child['url'], category, depth + 1)
+        for sub in sub_sections:
+            child_url = urljoin(BASE_URL, sub.get('SECTION_PAGE_URL') or '')
+            self._process_category(sub.get('NAME') or '', child_url, category, depth + 1)
 
     def _save_category(self, name, url, parent):
         code = slug_from_url(url)
@@ -181,14 +171,17 @@ class Command(BaseCommand):
         self.stdout.write(f'Категория: {"  " * (0 if parent is None else 1)}{name} ({code})')
         return category
 
-    def _scrape_products(self, category):
+    def _scrape_products(self, category, first_page=None):
         page = 1
         while True:
-            data = self._get_json(FILTER_URL, params={
-                'section_code': category.slug,
-                'page': page,
-                'page_size': self.page_size,
-            })
+            if first_page is not None and page == 1:
+                data = first_page
+            else:
+                data = self._get_json(FILTER_URL, params={
+                    'section_code': category.slug,
+                    'page': page,
+                    'page_size': self.page_size,
+                })
             if not data or data.get('status') != 'success':
                 break
 
