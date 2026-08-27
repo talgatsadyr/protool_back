@@ -62,6 +62,10 @@ class Command(BaseCommand):
             '--skip-details', action='store_true',
             help='Не заходить на страницу товара за характеристиками, галереей фото и сертификатом',
         )
+        parser.add_argument(
+            '--skip-existing', action='store_true',
+            help='Не трогать товары, уже существующие в БД (по external_id) — только добавлять новые',
+        )
 
     def handle(self, *args, **options):
         self.delay = options['delay']
@@ -69,6 +73,7 @@ class Command(BaseCommand):
         self.max_depth = options['max_depth']
         self.skip_images = options['skip_images']
         self.skip_details = options['skip_details']
+        self.skip_existing = options['skip_existing']
         self.session = self._build_session()
 
         if not self.skip_details and not shutil.which('node'):
@@ -202,6 +207,9 @@ class Command(BaseCommand):
         external_id = item.get('code') or str(item.get('id') or '')
         name = (item.get('name') or '').strip()
         if not external_id or not name:
+            return
+
+        if self.skip_existing and Product.objects.filter(external_id=external_id).exists():
             return
 
         product, created = Product.objects.get_or_create(
