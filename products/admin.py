@@ -5,6 +5,7 @@ from django import forms
 from django.contrib import admin, messages
 from django.shortcuts import redirect, render
 from django.urls import path
+from mptt.admin import MPTTModelAdmin
 from openpyxl import load_workbook
 
 from .models import Category, Product, ProductImage
@@ -17,7 +18,8 @@ class PriceImportForm(forms.Form):
 
 
 @admin.register(Category)
-class CategoryAdmin(admin.ModelAdmin):
+class CategoryAdmin(MPTTModelAdmin):
+    mptt_indent_field = 'name'
     list_display = ('name', 'parent', 'slug')
     search_fields = ('name', 'slug')
     list_filter = ('parent',)
