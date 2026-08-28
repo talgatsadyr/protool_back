@@ -10,7 +10,6 @@ from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
-from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -57,7 +56,7 @@ class Command(BaseCommand):
         parser.add_argument('--delay', type=float, default=0.4, help='Пауза между запросами к сайту, сек')
         parser.add_argument('--page-size', type=int, default=50, help='Размер страницы товаров при запросе к API')
         parser.add_argument('--max-depth', type=int, default=8, help='Предельная глубина дерева категорий')
-        parser.add_argument('--skip-images', action='store_true', help='Не скачивать изображения товаров')
+        parser.add_argument('--skip-images', action='store_true', help='Не сохранять ссылки на изображения товаров')
         parser.add_argument(
             '--skip-details', action='store_true',
             help='Не заходить на страницу товара за характеристиками, галереей фото и сертификатом',
@@ -213,7 +212,7 @@ class Command(BaseCommand):
         if self.skip_existing and article and Product.objects.filter(article=article).exists():
             return
 
-        product, created = Product.objects.get_or_create(
+        product, _ = Product.objects.get_or_create(
             external_id=external_id,
             defaults={'category': category, 'name': name[:255], 'price': Decimal('0')},
         )
@@ -234,10 +233,11 @@ class Command(BaseCommand):
         if self.products_count % 50 == 0:
             self.stdout.write(f'  ...товаров обработано: {self.products_count}')
 
-        if not self.skip_images and (created or not product.image):
+        if not self.skip_images:
             image_url = self._extract_image_url(item)
             if image_url:
-                self._download_image(product, image_url)
+                product.image = urljoin(BASE_URL, image_url)
+                product.save(update_fields=['image'])
 
         if detail:
             if not self.skip_images:
@@ -252,20 +252,6 @@ class Command(BaseCommand):
         if pictures and isinstance(pictures[0], dict):
             return pictures[0].get('src')
         return None
-
-    def _download_image(self, product, src):
-        url = urljoin(BASE_URL, src)
-        try:
-            resp = self.session.get(url, timeout=REQUEST_TIMEOUT)
-            resp.raise_for_status()
-            time.sleep(self.delay)
-        except requests.RequestException as exc:
-            self.errors_count += 1
-            self.stderr.write(self.style.WARNING(f'Не удалось скачать изображение {url}: {exc}'))
-            return
-
-        filename = os.path.basename(urlparse(src).path) or f'{product.external_id}.jpg'
-        product.image.save(filename, ContentFile(resp.content), save=True)
 
     def _fetch_detail_data(self, item_url):
         """Страница товара — SSR-Nuxt приложение: список карточек не содержит настоящих
@@ -367,19 +353,7 @@ class Command(BaseCommand):
             if not src:
                 continue
 
-            url = urljoin(BASE_URL, src)
-            try:
-                resp = self.session.get(url, timeout=REQUEST_TIMEOUT)
-                resp.raise_for_status()
-                time.sleep(self.delay)
-            except requests.RequestException as exc:
-                self.errors_count += 1
-                self.stderr.write(self.style.WARNING(f'Не удалось скачать фото {url}: {exc}'))
-                continue
-
-            filename = os.path.basename(urlparse(src).path) or f'{product.external_id}_{order}.jpg'
-            image = ProductImage(product=product, order=order)
-            image.image.save(filename, ContentFile(resp.content), save=True)
+            ProductImage.objects.create(product=product, order=order, image=urljoin(BASE_URL, src))
             order += 1
 
     def _save_certificate(self, product, documents):
@@ -389,16 +363,6 @@ class Command(BaseCommand):
             if not filepath or 'сертификат' not in doc_type.lower():
                 continue
 
-            url = urljoin(BASE_URL, filepath)
-            try:
-                resp = self.session.get(url, timeout=REQUEST_TIMEOUT)
-                resp.raise_for_status()
-                time.sleep(self.delay)
-            except requests.RequestException as exc:
-                self.errors_count += 1
-                self.stderr.write(self.style.WARNING(f'Не удалось скачать сертификат {url}: {exc}'))
-                return
-
-            filename = os.path.basename(urlparse(filepath).path) or f'{product.external_id}_certificate.pdf'
-            product.product_certificate.save(filename, ContentFile(resp.content), save=True)
+            product.product_certificate = urljoin(BASE_URL, filepath)
+            product.save(update_fields=['product_certificate'])
             return

@@ -22,9 +22,9 @@ class Product(models.Model):
     name = models.CharField(max_length=255, verbose_name='Название продукта')
     description = models.TextField(blank=True, null=True, verbose_name='Описание продукта')
     price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Цена продукта')
-    image = models.ImageField(upload_to='product_images/', blank=True, null=True, verbose_name='Изображение продукта')
+    image = models.URLField(max_length=500, blank=True, null=True, verbose_name='Изображение продукта')
     product_properties = models.JSONField(blank=True, null=True, verbose_name='Свойства продукта')
-    product_certificate = models.FileField(upload_to='product_certificates/', blank=True, null=True, verbose_name='Сертификат продукта')
+    product_certificate = models.URLField(max_length=500, blank=True, null=True, verbose_name='Сертификат продукта')
 
 
     def __str__(self):
@@ -33,7 +33,7 @@ class Product(models.Model):
 
 class ProductImage(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='images', verbose_name='Продукт')
-    image = models.ImageField(upload_to='product_images/gallery/', verbose_name='Изображение')
+    image = models.URLField(max_length=500, verbose_name='Изображение')
     order = models.PositiveIntegerField(default=0, verbose_name='Порядок')
 
     class Meta:
